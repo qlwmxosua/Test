@@ -26,56 +26,51 @@ end
 
 local function isValidBlock(obj)
     if not obj:IsA("BasePart") then return false end
+    if obj.Anchored == false then return false end
     if obj.Parent:FindFirstChild("Humanoid") then return false end
-    if obj.Name == "Baseplate" or obj.Name == "Terrain" then return false end
-    if obj.Transparency > 0.9 then return false end
-    if obj.Position.Y < -50 then return false end
+    if obj.Position.Y < 0 then return false end
+    if math.abs(obj.Position.X) < 80 and math.abs(obj.Position.Z) < 80 then return false end
     return true
 end
 
 local cachedBlocks = {}
-local blockToIndex = {}
+local grid = {}
+local gridKeys = {}
+local gridSize = 100
 
-local function addBlockToCache(v)
-    if not blockToIndex[v] and isValidBlock(v) then
-        if v.Name:lower():find("block") or v.Name:lower():find("part") then
+local function refreshBlocks()
+    cachedBlocks = {}
+    grid = {}
+    gridKeys = {}
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if isValidBlock(v) then
             table.insert(cachedBlocks, v)
-            blockToIndex[v] = #cachedBlocks
+            local gx = math.floor(v.Position.X / gridSize)
+            local gz = math.floor(v.Position.Z / gridSize)
+            local key = gx .. "_" .. gz
+            if not grid[key] then
+                grid[key] = {}
+                table.insert(gridKeys, key)
+            end
+            table.insert(grid[key], v)
         end
     end
 end
 
-local function removeBlockFromCache(v)
-    local idx = blockToIndex[v]
-    if idx then
-        local lastIdx = #cachedBlocks
-        local lastBlock = cachedBlocks[lastIdx]
-        if idx ~= lastIdx then
-            cachedBlocks[idx] = lastBlock
-            blockToIndex[lastBlock] = idx
-        end
-        table.remove(cachedBlocks)
-        blockToIndex[v] = nil
+refreshBlocks()
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        refreshBlocks()
     end
-end
-
-for _, v in ipairs(workspace:GetDescendants()) do
-    addBlockToCache(v)
-end
-
-table.insert(connections, workspace.DescendantAdded:Connect(addBlockToCache))
-table.insert(connections, workspace.DescendantRemoving:Connect(removeBlockFromCache))
+end)
 
 local function getRandomBlock()
-    if #cachedBlocks == 0 then return nil end
-    local index = math.random(1, #cachedBlocks)
-    local block = cachedBlocks[index]
-    if block and block.Parent and isValidBlock(block) then
-        return block
-    else
-        removeBlockFromCache(block)
-        return getRandomBlock()
-    end
+    if #gridKeys == 0 then return nil end
+    local key = gridKeys[math.random(1, #gridKeys)]
+    local cell = grid[key]
+    return cell[math.random(1, #cell)]
 end
 
 local gui = Instance.new("ScreenGui")
@@ -109,15 +104,18 @@ if not isWhitelisted then
     systemMessage.BackgroundTransparency = 0.2
     systemMessage.BackgroundColor3 = Color3.fromRGB(30,30,30)
     systemMessage.ZIndex = 60
+
     local corner = Instance.new("UICorner")  
     corner.Parent = systemMessage  
     corner.CornerRadius = UDim.new(0,12)  
+
     local uiStroke = Instance.new("UIStroke")  
     uiStroke.Parent = systemMessage  
     uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border  
     uiStroke.LineJoinMode = Enum.LineJoinMode.Round  
     uiStroke.Color = Color3.fromRGB(60,60,60)  
     uiStroke.Thickness = 2  
+
     local mainText = Instance.new("TextLabel")  
     mainText.Parent = systemMessage  
     mainText.BackgroundTransparency = 1  
@@ -128,6 +126,18 @@ if not isWhitelisted then
     mainText.Font = Enum.Font.GothamBold  
     mainText.ZIndex = 61  
     mainText.Text = "Add your ID to the whitelist"  
+
+    local subText = Instance.new("TextLabel")  
+    subText.Parent = systemMessage  
+    subText.BackgroundTransparency = 1  
+    subText.Size = UDim2.new(1,-20,0,30)  
+    subText.Position = UDim2.new(0,10,0,80)  
+    subText.TextColor3 = Color3.fromRGB(200,200,200)  
+    subText.TextScaled = true  
+    subText.Font = Enum.Font.Gotham  
+    subText.ZIndex = 61  
+    subText.Text = ""  
+
     local closeBtn = Instance.new("TextButton")  
     closeBtn.Parent = systemMessage  
     closeBtn.Size = UDim2.new(0,80,0,25)  
@@ -136,7 +146,24 @@ if not isWhitelisted then
     closeBtn.BackgroundColor3 = Color3.fromRGB(180,50,50)  
     closeBtn.TextColor3 = Color3.new(1,1,1)  
     closeBtn.ZIndex = 62  
-    closeBtn.MouseButton1Click:Connect(function() systemMessage:Destroy() end)  
+    closeBtn.TextSize = 14  
+    closeBtn.Font = Enum.Font.GothamBold  
+
+    local closeCorner = Instance.new("UICorner")  
+    closeCorner.Parent = closeBtn  
+    closeCorner.CornerRadius = UDim.new(0,8)  
+
+    closeBtn.MouseEnter:Connect(function()  
+        closeBtn.BackgroundColor3 = Color3.fromRGB(220,80,80)  
+    end)  
+    closeBtn.MouseLeave:Connect(function()  
+        closeBtn.BackgroundColor3 = Color3.fromRGB(180,50,50)  
+    end)  
+    closeBtn.MouseButton1Click:Connect(function()  
+        systemMessage:Destroy()  
+    end)  
+
+    local discordLink = "https://discord.gg/GrPQCcrU5"  
     local discordBtn = Instance.new("TextButton")  
     discordBtn.Parent = systemMessage  
     discordBtn.Size = UDim2.new(0,140,0,25)  
@@ -145,7 +172,26 @@ if not isWhitelisted then
     discordBtn.BackgroundColor3 = Color3.fromRGB(50,100,180)  
     discordBtn.TextColor3 = Color3.new(1,1,1)  
     discordBtn.ZIndex = 62  
-    discordBtn.MouseButton1Click:Connect(function() setclipboard("https://discord.gg/GrPQCcrU5") end)  
+    discordBtn.TextSize = 14  
+    discordBtn.Font = Enum.Font.GothamBold  
+
+    local discordCorner = Instance.new("UICorner")  
+    discordCorner.Parent = discordBtn  
+    discordCorner.CornerRadius = UDim.new(0,8)  
+
+    discordBtn.MouseEnter:Connect(function()  
+        discordBtn.BackgroundColor3 = Color3.fromRGB(70,130,220)  
+    end)  
+    discordBtn.MouseLeave:Connect(function()  
+        discordBtn.BackgroundColor3 = Color3.fromRGB(50,100,180)  
+    end)  
+    discordBtn.MouseButton1Click:Connect(function()  
+        setclipboard(discordLink)  
+        discordBtn.Text = "Copied!"  
+        task.delay(2,function()  
+            discordBtn.Text = "Copy Discord Link"  
+        end)  
+    end)  
     return
 end
 
@@ -187,6 +233,7 @@ eatBtn.Position = UDim2.new(0,5,0,18)
 eatBtn.Text = "Only Eat : OFF"
 eatBtn.ZIndex = 51
 eatBtn.TextSize = 10
+
 local eatOn = false
 eatBtn.MouseButton1Click:Connect(function()
     eatOn = not eatOn
@@ -198,7 +245,10 @@ eatBtn.MouseButton1Click:Connect(function()
                 if events then
                     local grab = events:FindFirstChild("Grab")
                     local eat = events:FindFirstChild("Eat")
-                    if grab and eat then grab:FireServer() eat:FireServer() end
+                    if grab and eat then
+                        grab:FireServer()
+                        eat:FireServer()
+                    end
                 end
                 task.wait(0.01)
             end
@@ -213,20 +263,26 @@ anchorBtn.Position = UDim2.new(0,5,0,40)
 anchorBtn.Text = "Unanchor : OFF"
 anchorBtn.ZIndex = 51
 anchorBtn.TextSize = 10
+
 local anchorOn = false
 anchorBtn.MouseButton1Click:Connect(function()
     anchorOn = not anchorOn
-    anchorBtn.Text = anchorOn and "Unanchor : ON" or "Unanchor : OFF"
     if anchorOn then
+        anchorBtn.Text = "Unanchor : ON"
         task.spawn(function()
             while anchorOn and gui.Parent do
                 local char = player.Character
-                if char and char:FindFirstChild("HumanoidRootPart") and char.HumanoidRootPart.Anchored then
-                    char.HumanoidRootPart.Anchored = false
+                if char then
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if root and root.Anchored then
+                        root.Anchored = false
+                    end
                 end
                 task.wait(0.03)
             end
         end)
+    else
+        anchorBtn.Text = "Unanchor : OFF"
     end
 end)
 
@@ -237,6 +293,7 @@ floorBtn.Position = UDim2.new(0,5,0,62)
 floorBtn.Text = "Floor : OFF"
 floorBtn.ZIndex = 51
 floorBtn.TextSize = 10
+
 local floorEnabled = false
 floorBtn.MouseButton1Click:Connect(function()
     floorEnabled = not floorEnabled
@@ -248,17 +305,23 @@ floorBtn.MouseButton1Click:Connect(function()
                 if character and character:FindFirstChild("HumanoidRootPart") then
                     local pos = character.HumanoidRootPart.Position
                     local size = character:GetExtentsSize()
+                    local minSize = 5
                     local part = Instance.new("Part")
-                    part.Size = Vector3.new(math.max(size.X * 1.5, 5), 1, math.max(size.Z * 1.5, 5))
+                    part.Size = Vector3.new(math.max(size.X * 1.5, minSize), 1, math.max(size.Z * 1.5, minSize))
                     part.Position = Vector3.new(pos.X, 0, pos.Z)
                     part.Anchored = true
                     part.Transparency = 0.9
                     part.Parent = workspace
-                    task.delay(0.5, function() if part then part:Destroy() end end)
-                end
-                task.wait(0.05)
-            end
-        end)
+
+                    task.delay(0.5, function()  
+                        if part then  
+                            part:Destroy()  
+                        end  
+                    end)  
+                end  
+                task.wait(0.05)  
+            end  
+        end)  
     end
 end)
 
@@ -271,12 +334,12 @@ tpBtn.ZIndex = 51
 tpBtn.TextSize = 10
 tpBtn.MouseButton1Click:Connect(function()
     local char = player.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local root = char.HumanoidRootPart
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
-        root.CFrame = CFrame.new(0,100 + root.Size.Y,0)
-    end
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CFrame = CFrame.new(0,100 + root.Size.Y,0)
 end)
 
 local antiVoidBtn = Instance.new("TextButton")
@@ -286,6 +349,7 @@ antiVoidBtn.Position = UDim2.new(0,5,0,106)
 antiVoidBtn.Text = "Anti Void : ON"
 antiVoidBtn.ZIndex = 51
 antiVoidBtn.TextSize = 10
+
 local antiVoid = true
 antiVoidBtn.MouseButton1Click:Connect(function()
     antiVoid = not antiVoid
@@ -302,32 +366,48 @@ grabBlocksBtn.Position = UDim2.new(0,5,0,128)
 grabBlocksBtn.Text = "TP Grab Blocks"
 grabBlocksBtn.ZIndex = 51
 grabBlocksBtn.TextSize = 10
+
 grabBlocksBtn.MouseButton1Click:Connect(function()
     local block = getRandomBlock()
-    if block and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local prevVoid = workspace.FallenPartsDestroyHeight
-        workspace.FallenPartsDestroyHeight = 0/0
+    if block and block.Parent then
         local char = player.Character
-        local root = char.HumanoidRootPart
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then workspace.FallenPartsDestroyHeight = prevVoid return end
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not root or not humanoid then return end
+
         local start = root.CFrame
         isTeleporting = true
-        local offsetY = (block.Size.Y / 2) + hum.HipHeight + (root.Size.Y / 2)
-        root.CFrame = block.CFrame + Vector3.new(0, offsetY, 0)
-        task.wait(0.1)
+
+        local offsetY = (block.Size.Y / 2) + humanoid.HipHeight + (root.Size.Y / 2)
+        local targetCFrame = block.CFrame + Vector3.new(0, offsetY, 0)
+
+        root.CFrame = targetCFrame
+
+        task.wait(0.05)
+
         local events = getEvents()
-        if events and events:FindFirstChild("Grab") then
-            for i = 1, 5 do events.Grab:FireServer() task.wait(0.05) end
+        if events then
+            local grab = events:FindFirstChild("Grab")
+            if grab then
+                for i = 1, 5 do
+                    grab:FireServer()
+                    task.wait(0.03)
+                end
+            end
         end
+
+        local original = root.Anchored
+        root.Anchored = false
         task.wait(0.1)
+        root.Anchored = original
+
         if safeZoneActive then
             root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
             root.CFrame = safeZoneTargetCF
-            workspace.FallenPartsDestroyHeight = 0/0
         else
             root.CFrame = start
-            workspace.FallenPartsDestroyHeight = prevVoid
         end
         isTeleporting = false
     end
@@ -341,6 +421,12 @@ attackButton.Text = "TP Attack : OFF"
 attackButton.ZIndex = 51
 attackButton.TextSize = 10
 
+local tpAttackOn = false
+attackButton.MouseButton1Click:Connect(function()
+    tpAttackOn = not tpAttackOn
+    attackButton.Text = tpAttackOn and "TP Attack : ON" or "TP Attack : OFF"
+end)
+
 local grabButton = Instance.new("TextButton")
 grabButton.Parent = frame
 grabButton.Size = UDim2.new(1,-10,0,20)
@@ -348,6 +434,12 @@ grabButton.Position = UDim2.new(0,5,0,172)
 grabButton.Text = "TP Grab : OFF"
 grabButton.ZIndex = 51
 grabButton.TextSize = 10
+
+local tpGrabOn = false
+grabButton.MouseButton1Click:Connect(function()
+    tpGrabOn = not tpGrabOn
+    grabButton.Text = tpGrabOn and "TP Grab : ON" or "TP Grab : OFF"
+end)
 
 local removeMapBtn = Instance.new("TextButton")
 removeMapBtn.Parent = frame
@@ -364,6 +456,7 @@ antiSlipBtn.Position = UDim2.new(0,5,0,216)
 antiSlipBtn.Text = "Anti Slip : OFF"
 antiSlipBtn.ZIndex = 51
 antiSlipBtn.TextSize = 10
+
 local antiSlipOn = false
 antiSlipBtn.MouseButton1Click:Connect(function()
     antiSlipOn = not antiSlipOn
@@ -380,27 +473,40 @@ safeZoneBtn.TextSize = 10
 
 local safeZoneLastPos = nil
 local safeZoneConnectionsList = {}
+
 local function hardLockSafeZone()
     if safeZoneActive and not isTeleporting then
         local char = player.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            local hrp = char.HumanoidRootPart
-            hrp.CFrame = safeZoneTargetCF
-            hrp.AssemblyLinearVelocity = Vector3.zero
-            hrp.AssemblyAngularVelocity = Vector3.zero
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.CFrame = safeZoneTargetCF
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end
         end
     end
 end
+
 local function stopSafeZoneLock()
-    for _, connection in pairs(safeZoneConnectionsList) do connection:Disconnect() end
+    for _, connection in pairs(safeZoneConnectionsList) do
+        connection:Disconnect()
+    end
     safeZoneConnectionsList = {}
     local char = player.Character
-    if char and char:FindFirstChildOfClass("Humanoid") then char:FindFirstChildOfClass("Humanoid").PlatformStand = false end
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.PlatformStand = false
+        end
+    end
 end
+
 local function startSafeZoneLock()
     table.insert(safeZoneConnectionsList, RunService.RenderStepped:Connect(hardLockSafeZone))
     table.insert(safeZoneConnectionsList, RunService.Stepped:Connect(hardLockSafeZone))
     table.insert(safeZoneConnectionsList, RunService.Heartbeat:Connect(hardLockSafeZone))
+
     local char = player.Character  
     if char then  
         local hrp = char:FindFirstChild("HumanoidRootPart")  
@@ -409,67 +515,118 @@ local function startSafeZoneLock()
             table.insert(safeZoneConnectionsList, hrp:GetPropertyChangedSignal("CFrame"):Connect(hardLockSafeZone))  
             table.insert(safeZoneConnectionsList, hrp:GetPropertyChangedSignal("Position"):Connect(hardLockSafeZone))  
         end  
-        if hum then hum.PlatformStand = true end  
+        if hum then  
+            hum.PlatformStand = true  
+        end  
     end
 end
+
 safeZoneBtn.MouseButton1Click:Connect(function()
     safeZoneActive = not safeZoneActive
     if safeZoneActive then
-        workspace.FallenPartsDestroyHeight = 0/0
         safeZoneBtn.Text = "Safe Zone : ON"
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then safeZoneLastPos = player.Character.HumanoidRootPart.CFrame end
+        local char = player.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                safeZoneLastPos = hrp.CFrame
+            end
+        end
+        workspace.FallenPartsDestroyHeight = 0/0
         startSafeZoneLock()
     else
         safeZoneBtn.Text = "Safe Zone : OFF"
         stopSafeZoneLock()
         workspace.FallenPartsDestroyHeight = -500
-        if safeZoneLastPos and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then player.Character.HumanoidRootPart.CFrame = safeZoneLastPos end
+        if safeZoneLastPos then
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.CFrame = safeZoneLastPos
+                end
+            end
+        end
     end
 end)
 
-local execMsg = Instance.new("Frame")
-execMsg.Parent = gui
-execMsg.AnchorPoint = Vector2.new(1, 1)
-execMsg.Position = UDim2.new(1, 400, 1, -20)
-execMsg.Size = UDim2.new(0, 300, 0, 65)
-execMsg.BackgroundTransparency = 0.25
-execMsg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-local msgCorner = Instance.new("UICorner")
-msgCorner.CornerRadius = UDim.new(0, 6)
-msgCorner.Parent = execMsg
-local msgText = Instance.new("TextLabel")
-msgText.Parent = execMsg
-msgText.BackgroundTransparency = 1
-msgText.Size = UDim2.new(1, -30, 0, 20)
-msgText.Position = UDim2.new(0, 15, 0, 12)
-msgText.Text = "GUI was successfully executed"
-msgText.TextColor3 = Color3.fromRGB(255, 255, 255)
-msgText.TextSize = 16
-msgText.Font = Enum.Font.SourceSansBold
-msgText.TextXAlignment = Enum.TextXAlignment.Left
-local subMsg = Instance.new("TextLabel")
-subMsg.Parent = execMsg
-subMsg.BackgroundTransparency = 1
-subMsg.Size = UDim2.new(1, -30, 0, 20)
-subMsg.Position = UDim2.new(0, 15, 0, 34)
-subMsg.Text = "made by h1xn"
-subMsg.TextColor3 = Color3.fromRGB(220, 220, 220)
-subMsg.TextSize = 14
-subMsg.Font = Enum.Font.SourceSans
-subMsg.TextXAlignment = Enum.TextXAlignment.Left
-TweenService:Create(execMsg, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(1, -20, 1, -20)}):Play()
-task.delay(4, function() TweenService:Create(execMsg, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2.new(1, 400, 1, -20)}):Play() end)
+local systemMessage = Instance.new("Frame")
+systemMessage.Parent = gui
+systemMessage.AnchorPoint = Vector2.new(1, 1)
+systemMessage.Position = UDim2.new(1, 400, 1, -20)
+systemMessage.Size = UDim2.new(0, 300, 0, 65)
+systemMessage.BackgroundTransparency = 0.25
+systemMessage.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+systemMessage.ZIndex = 60
+systemMessage.ClipsDescendants = true
 
-openBtn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 6)
+uiCorner.Parent = systemMessage
+
+local uiStroke = Instance.new("UIStroke")
+uiStroke.Parent = systemMessage
+uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+uiStroke.Color = Color3.fromRGB(200, 200, 200)
+uiStroke.Transparency = 0.7
+uiStroke.Thickness = 1
+
+local mainText = Instance.new("TextLabel")
+mainText.Parent = systemMessage
+mainText.BackgroundTransparency = 1
+mainText.Size = UDim2.new(1, -30, 0, 20)
+mainText.Position = UDim2.new(0, 15, 0, 12)
+mainText.Text = "GUI was successfully executed"
+mainText.TextColor3 = Color3.fromRGB(255, 255, 255)
+mainText.TextSize = 16
+mainText.Font = Enum.Font.SourceSansBold
+mainText.TextXAlignment = Enum.TextXAlignment.Left
+mainText.ZIndex = 61
+
+local subText = Instance.new("TextLabel")
+subText.Parent = systemMessage
+subText.BackgroundTransparency = 1
+subText.Size = UDim2.new(1, -30, 0, 20)
+subText.Position = UDim2.new(0, 15, 0, 34)
+subText.Text = "made by h1xn"
+subText.TextColor3 = Color3.fromRGB(220, 220, 220)
+subText.TextSize = 14
+subText.Font = Enum.Font.SourceSans
+subText.TextXAlignment = Enum.TextXAlignment.Left
+subText.ZIndex = 61
+
+local tween = TweenService:Create(
+    systemMessage,
+    TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    {Position = UDim2.new(1, -20, 1, -20)}
+)
+
+tween:Play()
+
+task.delay(4, function()
+    local tweenOut = TweenService:Create(
+        systemMessage,
+        TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+        {Position = UDim2.new(1, 400, 1, -20)}
+    )
+    tweenOut:Play()
+end)
+
+openBtn.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+end)
 
 task.spawn(function()
     while gui.Parent do
         if antiVoid and not isTeleporting then
             local char = player.Character
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                local root = char.HumanoidRootPart
-                if root.Position.Y <= -400 and not (safeZoneActive and root.Position.Y <= -1490) then
-                    root.CFrame = CFrame.new(0,100,0)
+            if char then
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root and root.Position.Y <= -400 then
+                    if safeZoneActive and root.Position.Y <= -1490 then
+                    else
+                        root.CFrame = CFrame.new(0,100,0)
+                    end
                 end
             end
         end
@@ -478,20 +635,39 @@ task.spawn(function()
 end)
 
 table.insert(connections, RunService.RenderStepped:Connect(function()
-    if antiflingEnabled and player.Character then
-        for _,v in pairs(player.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.AssemblyAngularVelocity = Vector3.zero v.AssemblyLinearVelocity = Vector3.zero end
+    if antiflingEnabled then
+        local char = player.Character
+        if char then
+            for _,v in pairs(char:GetDescendants()) do
+                if v:IsA("BasePart") then
+                    v.AssemblyAngularVelocity = Vector3.zero
+                    v.AssemblyLinearVelocity = Vector3.zero
+                end
+            end
         end
     end
-    if antiSlipOn and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local root = player.Character.HumanoidRootPart
-        local hum = player.Character:FindFirstChildOfClass("Humanoid")
-        if root and hum then
-            pcall(function() root:SetNetworkOwner(player) end)
-            local vel = root.AssemblyLinearVelocity  
-            local move = hum.MoveDirection  
-            root.AssemblyLinearVelocity = move.Magnitude > 0 and Vector3.new(move.Unit.X * hum.WalkSpeed, vel.Y, move.Unit.Z * hum.WalkSpeed) or Vector3.new(0, vel.Y, 0)
-        end
+    if antiSlipOn then
+        local char = player.Character
+        if char then
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if root and hum then
+                pcall(function()
+                    root:SetNetworkOwner(player)
+                end)
+
+                local vel = root.AssemblyLinearVelocity  
+                local move = hum.MoveDirection  
+
+                if move.Magnitude > 0 then      
+                    local dir = move.Unit      
+                    local speed = hum.WalkSpeed      
+                    root.AssemblyLinearVelocity = Vector3.new(dir.X * speed, vel.Y, dir.Z * speed)      
+                else      
+                    root.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)      
+                end      
+            end      
+        end  
     end
 end))
 
@@ -500,15 +676,26 @@ local function setupAntiTrip(char)
     if hum then
         hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
         hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+
         table.insert(connections, hum.StateChanged:Connect(function(_, new)  
-            if new == Enum.HumanoidStateType.FallingDown or new == Enum.HumanoidStateType.Ragdoll then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end  
+            if new == Enum.HumanoidStateType.FallingDown or new == Enum.HumanoidStateType.Ragdoll then  
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)  
+            end  
         end))  
     end
 end
-if player.Character then task.spawn(setupAntiTrip, player.Character) end
+
+if player.Character then
+    task.spawn(setupAntiTrip, player.Character)
+end
+
 table.insert(connections, player.CharacterAdded:Connect(function(char)
+    local root = char:WaitForChild("HumanoidRootPart")
+    gui.Parent = player.PlayerGui
     isTeleporting = false
-    if safeZoneActive then startSafeZoneLock() end
+    if safeZoneActive then
+        startSafeZoneLock()
+    end
     setupAntiTrip(char)
 end))
 
@@ -520,6 +707,7 @@ listGui.BackgroundColor3 = Color3.fromRGB(30,30,30)
 listGui.Visible = false
 listGui.Active = true
 listGui.Draggable = true
+
 local attackListTitle = Instance.new("TextLabel")
 attackListTitle.Parent = listGui
 attackListTitle.Size = UDim2.new(1, 0, 0, 15)
@@ -527,12 +715,14 @@ attackListTitle.BackgroundTransparency = 1
 attackListTitle.Text = "TP Attack"
 attackListTitle.TextColor3 = Color3.fromRGB(150, 150, 150)
 attackListTitle.TextSize = 8
+
 local listFrame = Instance.new("ScrollingFrame")
 listFrame.Parent = listGui
 listFrame.Size = UDim2.new(1,-8,1,-19)
 listFrame.Position = UDim2.new(0,4,0,15)
 listFrame.BackgroundTransparency = 1
 listFrame.ScrollBarThickness = 3
+
 local layout = Instance.new("UIListLayout")
 layout.Parent = listFrame
 layout.Padding = UDim.new(0,2)
@@ -540,7 +730,10 @@ layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     listFrame.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y)
     listGui.Size = UDim2.new(0,130,0,math.min(layout.AbsoluteContentSize.Y+19,105))
 end)
-attackButton.MouseButton1Click:Connect(function() listGui.Visible = not listGui.Visible end)
+
+attackButton.MouseButton1Click:Connect(function()
+    listGui.Visible = not listGui.Visible
+end)
 
 local grabListGui = Instance.new("Frame")
 grabListGui.Parent = gui
@@ -550,6 +743,7 @@ grabListGui.BackgroundColor3 = Color3.fromRGB(30,30,30)
 grabListGui.Visible = false
 grabListGui.Active = true
 grabListGui.Draggable = true
+
 local grabListTitle = Instance.new("TextLabel")
 grabListTitle.Parent = grabListGui
 grabListTitle.Size = UDim2.new(1, 0, 0, 15)
@@ -557,12 +751,14 @@ grabListTitle.BackgroundTransparency = 1
 grabListTitle.Text = "TP Grab"
 grabListTitle.TextColor3 = Color3.fromRGB(150, 150, 150)
 grabListTitle.TextSize = 8
+
 local grabListFrame = Instance.new("ScrollingFrame")
 grabListFrame.Parent = grabListGui
 grabListFrame.Size = UDim2.new(1,-8,1,-19)
 grabListFrame.Position = UDim2.new(0,4,0,15)
 grabListFrame.BackgroundTransparency = 1
 grabListFrame.ScrollBarThickness = 3
+
 local grabLayout = Instance.new("UIListLayout")
 grabLayout.Parent = grabListFrame
 grabLayout.Padding = UDim.new(0,2)
@@ -570,134 +766,255 @@ grabLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
     grabListFrame.CanvasSize = UDim2.new(0,0,0,grabLayout.AbsoluteContentSize.Y)
     grabListGui.Size = UDim2.new(0,130,0,math.min(grabLayout.AbsoluteContentSize.Y+19,105))
 end)
-grabButton.MouseButton1Click:Connect(function() grabListGui.Visible = not grabListGui.Visible end)
+
+grabButton.MouseButton1Click:Connect(function()
+    grabListGui.Visible = not grabListGui.Visible
+end)
 
 local function runTPAttack(target)
     local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return end
-    local prevVoid = workspace.FallenPartsDestroyHeight
-    workspace.FallenPartsDestroyHeight = 0/0
-    local root = char.HumanoidRootPart
-    local targetRoot = target.Character.HumanoidRootPart
-    local head = char:FindFirstChild("Head")
+    if not char then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart")  
+    if not root then return end  
+
+    local humanoid = char:FindFirstChildOfClass("Humanoid")  
+    if not humanoid then return end  
+
+    local head = char:FindFirstChild("Head")  
+
+    local targetChar = target.Character  
+    if not targetChar then return end  
+
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")  
+    if not targetRoot then return end  
+
     local start = root.CFrame  
     local startTime = tick()  
+
     antiflingEnabled = true  
     isTeleporting = true
+
     local connection  
     connection = RunService.RenderStepped:Connect(function()  
-        if not gui.Parent or not targetRoot or not targetRoot.Parent or tick() - startTime >= 1 then  
-            if safeZoneActive then
-                root.CFrame = safeZoneTargetCF
-                workspace.FallenPartsDestroyHeight = 0/0
-            else
-                root.CFrame = start
-                workspace.FallenPartsDestroyHeight = prevVoid
-            end
-            antiflingEnabled = false isTeleporting = false
+        if not gui.Parent then  
+            isTeleporting = false
             if connection then connection:Disconnect() end  
             return  
         end  
-        local headOffset = head and (head.Position - root.Position) or Vector3.new(0, 1.5, 0)  
-        local tpPos = Vector3.new(targetRoot.Position.X, (targetRoot.Position.Y + (targetRoot.Position.Y - targetRoot.Size.Y/2))/2, targetRoot.Position.Z)  
-        root.CFrame = CFrame.new(tpPos - headOffset, (tpPos - headOffset) + targetRoot.CFrame.LookVector)  
+        if not targetRoot or not targetRoot.Parent then
+            if safeZoneActive then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                root.CFrame = safeZoneTargetCF
+            else
+                root.CFrame = start  
+            end
+            antiflingEnabled = false  
+            isTeleporting = false
+            if connection then connection:Disconnect() end  
+            return  
+        end  
+          
+        if tick() - startTime < 1 then  
+            local headOffset = head and (head.Position - root.Position) or Vector3.new(0, 1.5, 0)  
+            local footY = targetRoot.Position.Y - (targetRoot.Size.Y/2)  
+            local midY = (targetRoot.Position.Y + footY)/2  
+            local tpPos = Vector3.new(targetRoot.Position.X, midY, targetRoot.Position.Z)  
+            local look = targetRoot.CFrame.LookVector  
+            root.CFrame = CFrame.new(tpPos - headOffset, (tpPos - headOffset) + look)  
+        else
+            if safeZoneActive then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                root.CFrame = safeZoneTargetCF
+            else
+                root.CFrame = start  
+            end
+            antiflingEnabled = false  
+            isTeleporting = false
+            connection:Disconnect()  
+        end  
     end)  
+
     local events = getEvents()  
-    if events and events:FindFirstChild("Throw") then for i=1,3 do events.Throw:FireServer() task.wait(0.05) end end
+    if events then  
+        local throw = events:FindFirstChild("Throw")  
+        if throw then  
+            throw:FireServer()  
+            task.wait(0.05)  
+            throw:FireServer()  
+            task.wait(0.05)  
+            throw:FireServer()  
+        end  
+    end
 end
 
 local function runTPGrab(target)
     local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return end
-    local prevVoid = workspace.FallenPartsDestroyHeight
-    workspace.FallenPartsDestroyHeight = 0/0
-    local root = char.HumanoidRootPart
-    local targetRoot = target.Character.HumanoidRootPart
+    if not char then return end
+
+    local root = char:FindFirstChild("HumanoidRootPart")  
+    if not root then return end  
+
+    local targetChar = target.Character  
+    if not targetChar then return end  
+
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")  
+    if not targetRoot then return end  
+
     local start = root.CFrame  
     local startTime = tick()  
     local lastFire = 0  
-    antiflingEnabled = true isTeleporting = true
+
+    antiflingEnabled = true  
+    isTeleporting = true
+
     local connection  
     connection = RunService.RenderStepped:Connect(function()  
-        if not gui.Parent or not targetRoot or not targetRoot.Parent or tick() - startTime >= 1 then  
-            if safeZoneActive then
-                root.CFrame = safeZoneTargetCF
-                workspace.FallenPartsDestroyHeight = 0/0
-            else
-                root.CFrame = start
-                workspace.FallenPartsDestroyHeight = prevVoid
-            end
-            antiflingEnabled = false isTeleporting = false
+        if not gui.Parent then  
+            isTeleporting = false
             if connection then connection:Disconnect() end  
             return  
         end  
-        if tick() - lastFire > 0.1 then  
-            lastFire = tick()  
-            local pos = targetRoot.Position  
-            local look = targetRoot.CFrame.LookVector  
-            local finalPos = Vector3.new(pos.X, (targetRoot.Position.Y - targetRoot.Size.Y/2) + root.Size.Y/2, pos.Z)  
-            root.CFrame = CFrame.new(finalPos - look * (root.Size.Y / 2), finalPos)  
-            local events = getEvents()
-            if events and events:FindFirstChild("Grab") then events.Grab:FireServer(false, true, pos, "弯腰抓取") end
+        if not targetRoot or not targetRoot.Parent then  
+            if safeZoneActive then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                root.CFrame = safeZoneTargetCF
+            else
+                root.CFrame = start  
+            end
+            antiflingEnabled = false  
+            isTeleporting = false
+            if connection then connection:Disconnect() end  
+            return  
+        end  
+
+        if tick() - startTime < 1 then  
+            if tick() - lastFire > 0.1 then  
+                lastFire = tick()  
+
+                local pos = targetRoot.Position  
+                local look = targetRoot.CFrame.LookVector  
+
+                local targetFootY = targetRoot.Position.Y - (targetRoot.Size.Y / 2)  
+                local finalY = targetFootY + (root.Size.Y / 2)  
+
+                local finalPos = Vector3.new(pos.X, finalY, pos.Z)  
+
+                root.CFrame = CFrame.new(finalPos - look * (root.Size.Y / 2), finalPos)  
+
+                pcall(function()  
+                    local events = getEvents()  
+                    if events then  
+                        local grab = events:FindFirstChild("Grab")  
+                        if grab then  
+                            grab:FireServer(false, true, pos, "弯腰抓取")  
+                        end  
+                    end  
+                end)  
+            end  
+        else  
+            if safeZoneActive then
+                root.AssemblyLinearVelocity = Vector3.zero
+                root.AssemblyAngularVelocity = Vector3.zero
+                root.CFrame = safeZoneTargetCF
+            else
+                root.CFrame = start  
+            end
+            antiflingEnabled = false  
+            isTeleporting = false
+            connection:Disconnect()  
         end  
     end)
 end
 
 local function createPlayerButton(plr)
     if plr == player then return end
+
     local btn = Instance.new("TextButton")  
-    btn.Parent = listFrame btn.Size = UDim2.new(1,0,0,20) btn.Text = plr.DisplayName btn.BackgroundColor3 = Color3.fromRGB(60,60,60)  
-    btn.MouseButton1Click:Connect(function() runTPAttack(plr) end)  
-    local gBtn = Instance.new("TextButton")  
-    gBtn.Parent = grabListFrame gBtn.Size = UDim2.new(1,0,0,20) gBtn.Text = plr.DisplayName gBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)  
-    gBtn.MouseButton1Click:Connect(function() runTPGrab(plr) end)
+    btn.Parent = listFrame  
+    btn.Size = UDim2.new(1,0,0,20)  
+    btn.Text = plr.DisplayName  
+    btn.BackgroundColor3 = Color3.fromRGB(60,60,60)  
+    btn.MouseButton1Click:Connect(function()  
+        runTPAttack(plr)  
+    end)  
+
+    local grabBtn = Instance.new("TextButton")  
+    grabBtn.Parent = grabListFrame  
+    grabBtn.Size = UDim2.new(1,0,0,20)  
+    grabBtn.Text = plr.DisplayName  
+    grabBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)  
+    grabBtn.MouseButton1Click:Connect(function()  
+        runTPGrab(plr)  
+    end)
 end
-for _,plr in pairs(Players:GetPlayers()) do createPlayerButton(plr) end
+
+for _,plr in pairs(Players:GetPlayers()) do
+    createPlayerButton(plr)
+end
+
 table.insert(connections, Players.PlayerAdded:Connect(createPlayerButton))
+
 table.insert(connections, Players.PlayerRemoving:Connect(function(plr)
-    for _,v in pairs(listFrame:GetChildren()) do if v:IsA("TextButton") and v.Text == plr.DisplayName then v:Destroy() end end
-    for _,v in pairs(grabListFrame:GetChildren()) do if v:IsA("TextButton") and v.Text == plr.DisplayName then v:Destroy() end end
+    for _,v in pairs(listFrame:GetChildren()) do
+        if v:IsA("TextButton") and v.Text == plr.DisplayName then
+            v:Destroy()
+        end
+    end
+    for _,v in pairs(grabListFrame:GetChildren()) do
+        if v:IsA("TextButton") and v.Text == plr.DisplayName then
+            v:Destroy()
+        end
+    end
 end))
 
 local mapRemoved = false
 local mapStorage = Instance.new("Folder")
 mapStorage.Name = "StoredMap"
 mapStorage.Parent = gui
-local isProcessingMap = false
+
 removeMapBtn.MouseButton1Click:Connect(function()
-    if isProcessingMap then return end
-    isProcessingMap = true
     mapRemoved = not mapRemoved
     if mapRemoved then
-        removeMapBtn.Text = "Removing..."
-        local count = 0
+        removeMapBtn.Text = "Remove Map : ON"
         for _,v in pairs(workspace:GetChildren()) do
-            if not Players:GetPlayerFromCharacter(v) and v ~= workspace.Terrain and not v:IsA("Camera") and not v:FindFirstChild("Events") then
+            if not Players:GetPlayerFromCharacter(v)
+            and v ~= workspace.Terrain
+            and not v:IsA("Camera")
+            and not v:FindFirstChild("Events") then
                 v.Parent = mapStorage
-                count = count + 1
-                if count % 100 == 0 then task.wait() end
             end
         end
+
         local floor = Instance.new("Part")  
-        floor.Name = "RemovedMapFloor" floor.Size = Vector3.new(100000,1,100000) floor.Position = Vector3.new(0,-1,0) floor.Anchored = true floor.Color = Color3.fromRGB(5,5,25) floor.Parent = workspace  
-        removeMapBtn.Text = "Remove Map : ON"
+        floor.Name = "RemovedMapFloor"  
+        floor.Size = Vector3.new(100000,1,100000)  
+        floor.Position = Vector3.new(0,-1,0)  
+        floor.Anchored = true  
+        floor.Color = Color3.fromRGB(5,5,25)  
+        floor.Parent = workspace  
     else  
-        removeMapBtn.Text = "Restoring..."
-        local count = 0
+        removeMapBtn.Text = "Remove Map : OFF"  
         for _,v in pairs(mapStorage:GetChildren()) do  
-            v.Parent = workspace
-            count = count + 1
-            if count % 100 == 0 then task.wait() end
+            v.Parent = workspace  
         end  
-        if workspace:FindFirstChild("RemovedMapFloor") then workspace.RemovedMapFloor:Destroy() end
-        removeMapBtn.Text = "Remove Map : OFF"
+        local floor = workspace:FindFirstChild("RemovedMapFloor")  
+        if floor then  
+            floor:Destroy()  
+        end  
     end
-    isProcessingMap = false
 end)
 
 gui.Destroying:Connect(function()
-    for _, conn in ipairs(connections) do conn:Disconnect() end
+    for _, conn in ipairs(connections) do
+        conn:Disconnect()
+    end
     stopSafeZoneLock()
     if workspace:FindFirstChild("RemovedMapFloor") then workspace.RemovedMapFloor:Destroy() end
-    for _, v in pairs(mapStorage:GetChildren()) do v.Parent = workspace end
+    for _, v in pairs(mapStorage:GetChildren()) do
+        v.Parent = workspace
+    end
 end)
