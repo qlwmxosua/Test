@@ -35,33 +35,40 @@ end
 
 local cachedBlocks = {}
 
-local function refreshBlocks()
-    local newBlocks = {}
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("block") or v.Name:lower():find("part")) then
-            if isValidBlock(v) then
-                table.insert(newBlocks, v)
-            end
+local function checkAndAddBlock(v)
+    if v:IsA("BasePart") and (v.Name:lower():find("block") or v.Name:lower():find("part")) then
+        if isValidBlock(v) then
+            table.insert(cachedBlocks, v)
         end
     end
-    cachedBlocks = newBlocks
 end
 
-refreshBlocks()
+for _, v in ipairs(workspace:GetDescendants()) do
+    checkAndAddBlock(v)
+end
 
-task.spawn(function()
-    while true do
-        task.wait(10)
-        refreshBlocks()
+table.insert(connections, workspace.DescendantAdded:Connect(checkAndAddBlock))
+
+table.insert(connections, workspace.DescendantRemoving:Connect(function(v)
+    if v:IsA("BasePart") then
+        local idx = table.find(cachedBlocks, v)
+        if idx then
+            table.remove(cachedBlocks, idx)
+        end
     end
-end)
+end))
 
 local function getRandomBlock()
-    if #cachedBlocks == 0 then 
-        refreshBlocks()
+    while #cachedBlocks > 0 do
+        local index = math.random(1, #cachedBlocks)
+        local block = cachedBlocks[index]
+        if block and block.Parent and isValidBlock(block) then
+            return block
+        else
+            table.remove(cachedBlocks, index)
+        end
     end
-    if #cachedBlocks == 0 then return nil end
-    return cachedBlocks[math.random(1, #cachedBlocks)]
+    return nil
 end
 
 local gui = Instance.new("ScreenGui")
