@@ -26,36 +26,42 @@ end
 
 local function isValidBlock(obj)
     if not obj:IsA("BasePart") then return false end
-    if obj.Anchored == false then return false end
     if obj.Parent:FindFirstChild("Humanoid") then return false end
-    if obj.Position.Y < 0 then return false end
+    if obj.Name == "Baseplate" or obj.Name == "Terrain" then return false end
+    if obj.Transparency > 0.9 then return false end
+    if obj.Position.Y < -50 then return false end
     return true
 end
 
 local cachedBlocks = {}
 
 local function refreshBlocks()
-    cachedBlocks = {}
+    local newBlocks = {}
     for _, v in ipairs(workspace:GetDescendants()) do
-        if isValidBlock(v) then
-            table.insert(cachedBlocks, v)
+        if v:IsA("BasePart") and (v.Name:lower():find("block") or v.Name:lower():find("part")) then
+            if isValidBlock(v) then
+                table.insert(newBlocks, v)
+            end
         end
     end
+    cachedBlocks = newBlocks
 end
 
 refreshBlocks()
 
 task.spawn(function()
     while true do
-        task.wait(5)
+        task.wait(10)
         refreshBlocks()
     end
 end)
 
 local function getRandomBlock()
+    if #cachedBlocks == 0 then 
+        refreshBlocks()
+    end
     if #cachedBlocks == 0 then return nil end
-    local index = math.random(1, #cachedBlocks)
-    return cachedBlocks[index]
+    return cachedBlocks[math.random(1, #cachedBlocks)]
 end
 
 local gui = Instance.new("ScreenGui")
@@ -365,11 +371,9 @@ grabBlocksBtn.MouseButton1Click:Connect(function()
         isTeleporting = true
 
         local offsetY = (block.Size.Y / 2) + humanoid.HipHeight + (root.Size.Y / 2)
-        local targetCFrame = block.CFrame + Vector3.new(0, offsetY, 0)
+        root.CFrame = block.CFrame + Vector3.new(0, offsetY, 0)
 
-        root.CFrame = targetCFrame
-
-        task.wait(0.05)
+        task.wait(0.1)
 
         local events = getEvents()
         if events then
@@ -377,15 +381,12 @@ grabBlocksBtn.MouseButton1Click:Connect(function()
             if grab then
                 for i = 1, 5 do
                     grab:FireServer()
-                    task.wait(0.03)
+                    task.wait(0.05)
                 end
             end
         end
 
-        local original = root.Anchored
-        root.Anchored = false
         task.wait(0.1)
-        root.Anchored = original
 
         if safeZoneActive then
             root.AssemblyLinearVelocity = Vector3.zero
