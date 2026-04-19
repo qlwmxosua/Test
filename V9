@@ -1003,4 +1003,3 @@ gui.Destroying:Connect(function()
         v.Parent = workspace
     end
 end)
-est
