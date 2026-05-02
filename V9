@@ -15,6 +15,9 @@ end
 local antiflingEnabled = false
 local isTeleporting = false
 local connections = {}
+local mapRemoved = false
+local processingMap = false
+local lastGrabbedBlock = nil
 
 local function getEvents()
     local p = workspace:FindFirstChild(player.Name)
@@ -25,7 +28,9 @@ local function getEvents()
 end
 
 local function isValidBlock(obj)
+    if mapRemoved then return false end
     if not obj:IsA("BasePart") then return false end
+    if not obj:IsDescendantOf(workspace) then return false end
     if obj.Anchored == false then return false end
     if obj.Parent:FindFirstChild("Humanoid") then return false end
     if obj.Position.Y < 0 then return false end
@@ -33,44 +38,104 @@ local function isValidBlock(obj)
     return true
 end
 
-local cachedBlocks = {}
 local grid = {}
 local gridKeys = {}
 local gridSize = 100
+local activeBlocks = {}
 
-local function refreshBlocks()
-    cachedBlocks = {}
+local function addBlockToGrid(v)
+    if not isValidBlock(v) then return false end
+    local gx = math.floor(v.Position.X / gridSize)
+    local gz = math.floor(v.Position.Z / gridSize)
+    local key = gx .. "_" .. gz
+    if not grid[key] then
+        grid[key] = {}
+        table.insert(gridKeys, key)
+    end
+    table.insert(grid[key], v)
+    return true
+end
+
+local function scanWorkspace()
     grid = {}
     gridKeys = {}
-    for _, v in ipairs(workspace:GetDescendants()) do
+    activeBlocks = {}
+    if mapRemoved then return end
+    local descendants = workspace:GetDescendants()
+    for i = 1, #descendants do
+        local v = descendants[i]
         if isValidBlock(v) then
-            table.insert(cachedBlocks, v)
-            local gx = math.floor(v.Position.X / gridSize)
-            local gz = math.floor(v.Position.Z / gridSize)
-            local key = gx .. "_" .. gz
-            if not grid[key] then
-                grid[key] = {}
-                table.insert(gridKeys, key)
-            end
-            table.insert(grid[key], v)
+            addBlockToGrid(v)
+            activeBlocks[v] = true
+        end
+        if i % 150 == 0 then
+            RunService.Heartbeat:Wait()
         end
     end
 end
 
-refreshBlocks()
+task.spawn(scanWorkspace)
 
-task.spawn(function()
-    while true do
-        task.wait(5)
-        refreshBlocks()
+table.insert(connections, workspace.DescendantAdded:Connect(function(v)
+    if mapRemoved then return end
+    if v:IsA("BasePart") then
+        task.delay(0.5, function()
+            if not mapRemoved and isValidBlock(v) and not activeBlocks[v] then
+                addBlockToGrid(v)
+                activeBlocks[v] = true
+            end
+        end)
     end
-end)
+end))
+
+table.insert(connections, workspace.DescendantRemoving:Connect(function(v)
+    if activeBlocks[v] then
+        activeBlocks[v] = nil
+    end
+    if lastGrabbedBlock == v then
+        lastGrabbedBlock = nil
+    end
+end))
 
 local function getRandomBlock()
-    if #gridKeys == 0 then return nil end
-    local key = gridKeys[math.random(1, #gridKeys)]
-    local cell = grid[key]
-    return cell[math.random(1, #cell)]
+    if mapRemoved then return nil end
+    local keysCount = #gridKeys
+    if keysCount == 0 then return nil end
+
+    local attempts = 0
+    while attempts < 30 do
+        attempts = attempts + 1
+        local keyIndex = math.random(1, keysCount)
+        local key = gridKeys[keyIndex]
+        local cell = grid[key]
+
+        if cell and #cell > 0 then
+            local blockIndex = math.random(1, #cell)
+            local block = cell[blockIndex]
+
+            if block and block.Parent and activeBlocks[block] and isValidBlock(block) then
+                if block ~= lastGrabbedBlock or keysCount == 1 then
+                    lastGrabbedBlock = block
+                    return block
+                end
+            else
+                table.remove(cell, blockIndex)
+                if #cell == 0 then
+                    grid[key] = nil
+                    table.remove(gridKeys, keyIndex)
+                    keysCount = #gridKeys
+                    if keysCount == 0 then return nil end
+                end
+            end
+        else
+            grid[key] = nil
+            table.remove(gridKeys, keyIndex)
+            keysCount = #gridKeys
+            if keysCount == 0 then return nil end
+        end
+    end
+    
+    return lastGrabbedBlock
 end
 
 local gui = Instance.new("ScreenGui")
@@ -971,41 +1036,62 @@ table.insert(connections, Players.PlayerRemoving:Connect(function(plr)
     end
 end))
 
-local mapRemoved = false
 local mapStorage = Instance.new("Folder")
 mapStorage.Name = "StoredMap"
 mapStorage.Parent = gui
 
 removeMapBtn.MouseButton1Click:Connect(function()
+    if processingMap then return end
+    processingMap = true
     mapRemoved = not mapRemoved
+    
     if mapRemoved then
-        removeMapBtn.Text = "Remove Map : ON"
-        for _,v in pairs(workspace:GetChildren()) do
-            if not Players:GetPlayerFromCharacter(v)
-            and v ~= workspace.Terrain
-            and not v:IsA("Camera")
-            and not v:FindFirstChild("Events") then
-                v.Parent = mapStorage
-            end
-        end
-
+        removeMapBtn.Text = "Removing..."
+        grid = {}
+        gridKeys = {}
+        activeBlocks = {}
+        
         local floor = Instance.new("Part")  
         floor.Name = "RemovedMapFloor"  
         floor.Size = Vector3.new(100000,1,100000)  
         floor.Position = Vector3.new(0,-1,0)  
         floor.Anchored = true  
         floor.Color = Color3.fromRGB(5,5,25)  
-        floor.Parent = workspace  
+        floor.Parent = workspace
+        
+        local children = workspace:GetChildren()
+        for i = 1, #children do
+            local v = children[i]
+            if not Players:GetPlayerFromCharacter(v)
+            and v ~= workspace.Terrain
+            and not v:IsA("Camera")
+            and not v:FindFirstChild("Events")
+            and v.Name ~= "RemovedMapFloor" then
+                v.Parent = mapStorage
+            end
+            if i % 100 == 0 then
+                RunService.Heartbeat:Wait()
+            end
+        end
+        removeMapBtn.Text = "Remove Map : ON"
     else  
-        removeMapBtn.Text = "Remove Map : OFF"  
-        for _,v in pairs(mapStorage:GetChildren()) do  
-            v.Parent = workspace  
-        end  
+        removeMapBtn.Text = "Restoring..."
+        local stored = mapStorage:GetChildren()
+        for i = 1, #stored do
+            local v = stored[i]
+            v.Parent = workspace
+            if i % 100 == 0 then
+                RunService.Heartbeat:Wait()
+            end
+        end
+        
         local floor = workspace:FindFirstChild("RemovedMapFloor")  
-        if floor then  
-            floor:Destroy()  
-        end  
+        if floor then floor:Destroy() end
+        
+        removeMapBtn.Text = "Remove Map : OFF"
+        task.spawn(scanWorkspace)
     end
+    processingMap = false
 end)
 
 gui.Destroying:Connect(function()
